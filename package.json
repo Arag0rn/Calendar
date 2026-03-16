@@ -9,7 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@react-oauth/google": "^0.13.4",
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^171.4.0",
+    "lucide-react": "^0.577.0",
     "next": "16.1.6",
+    "open": "^11.0.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
