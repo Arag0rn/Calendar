@@ -1,7 +1,6 @@
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs';
-import * as path from 'path';
+import { getServiceAccountKeyFile } from '@/lib/service-account';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,17 +8,8 @@ export async function GET(request: NextRequest) {
     const month = parseInt(searchParams.get('month') || String(new Date().getMonth()));
     const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()));
 
-    // Read service account key
-    const keyPath = path.join(process.cwd(), 'google-service-account.json');
-    if (!fs.existsSync(keyPath)) {
-      return NextResponse.json(
-        { error: 'Service account file not found. Create google-service-account.json in project root.' },
-        { status: 500 }
-      );
-    }
-
-    const keyFile = JSON.parse(fs.readFileSync(keyPath, 'utf-8'));
-    console.log('[Calendar API] Service Account Email:', keyFile.client_email);
+    // Get service account key
+    const keyFile = getServiceAccountKeyFile();
 
     // Create auth client
     const auth = new google.auth.GoogleAuth({
