@@ -18,15 +18,6 @@ interface BookingCalendarProps {
   busySlots?: Array<{ date: string; time: string }>;
 }
 
-const generateTimeSlots = () => {
-  const slots = [];
-  for (let hour = 9; hour < 18; hour++) {
-    slots.push(`${hour.toString().padStart(2, '0')}:00`);
-    slots.push(`${hour.toString().padStart(2, '0')}:30`);
-  }
-  return slots;
-};
-
 const getDaysInMonth = (date: Date) => {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 };

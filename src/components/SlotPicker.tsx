@@ -18,12 +18,33 @@ interface SlotPickerProps {
   busySlots?: Array<{ date: string; time: string }>;
 }
 
-const generateTimeSlots = () => {
+const generateTimeSlots = (dateStr: string) => {
   const slots = [];
-  for (let hour = 9; hour < 18; hour++) {
-    slots.push(`${hour.toString().padStart(2, '0')}:00`);
-    slots.push(`${hour.toString().padStart(2, '0')}:30`);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = date.getDay(); // 0 = Неділя, 1 = Понеділок, 2 = Вівторок, 3 = Середа
+  
+  // Вихідні дні для видалення: Пн (1), Вт (2), Ср (3)
+  const isWeekdayWithRestriction = dayOfWeek >= 1 && dayOfWeek <= 3;
+  
+  // Часи для видалення у Пн/Вт/Ср: 17:30 - 20:45 (тобто 17:30, 18:00, 18:30, 19:00, 19:30, 20:00, 20:30)
+  const blockedTimes = new Set([
+    '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30'
+  ]);
+  
+  for (let hour = 9; hour < 22; hour++) {
+    for (const minute of ['00', '30']) {
+      const timeStr = `${hour.toString().padStart(2, '0')}:${minute}`;
+      
+      // Пропустить заблоковані часи для Пн/Вт/Ср
+      if (isWeekdayWithRestriction && blockedTimes.has(timeStr)) {
+        continue;
+      }
+      
+      slots.push(timeStr);
+    }
   }
+  
   return slots;
 };
 
@@ -40,7 +61,7 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
   const [error, setError] = useState('');
   const [isCreatingMeet, setIsCreatingMeet] = useState(false);
 
-  const timeSlots = generateTimeSlots();
+  const timeSlots = generateTimeSlots(date);
   const bookedTimes = bookedSlots
     .filter(slot => slot.date === date)
     .map(slot => slot.time);
