@@ -1,8 +1,15 @@
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceAccountKeyFile } from '@/lib/service-account';
+import { partsToDateKey, partsToTimeKey, utcToZonedParts, zonedDateTimeToUtc } from '@/lib/timezone';
 
 const BOOKING_EVENT_PREFIX = '🔖 ';
+const BERLIN_TZ = 'Europe/Berlin';
+type CalendarEventLike = {
+  summary?: string | null;
+  id?: string | null;
+  start?: { dateTime?: string | null };
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,37 +22,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse date and time (client local time)
+    // Convert selected client-local wall-time to UTC instant, then to Berlin wall-time key.
     const [year, month, day] = date.split('-').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
-    
-    // Convert client local time to UTC
-    const clientDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    const clientTzOffsetMs = (timezoneOffsetMinutes || 0) * 60 * 1000;
-    const utcMs = clientDate.getTime() + clientTzOffsetMs;
-    const utcDate = new Date(utcMs);
+    const localMs = new Date(year, month - 1, day, hours, minutes, 0, 0).getTime();
+    const utcMs = localMs + (timezoneOffsetMinutes || 0) * 60 * 1000;
+    const selectedUtc = new Date(utcMs);
+    const berlin = utcToZonedParts(selectedUtc, BERLIN_TZ);
+    const berlinDate = partsToDateKey(berlin);
+    const berlinTime = partsToTimeKey(berlin);
+    const isPastEvent = selectedUtc.getTime() < Date.now();
 
-    // Convert UTC to Europe/Berlin timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Berlin',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-    
-    const parts = formatter.formatToParts(utcDate);
-    const berlinTime = Object.fromEntries(parts.map(p => [p.type, p.value]));
-    
-    const now = new Date();
-    // Check if event is in the past by comparing with current Berlin time
-    const eventBerlinDate = new Date(`${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T${berlinTime.hour}:${berlinTime.minute}:00`);
-    const isPastEvent = eventBerlinDate < now;
-
-    console.log('[Calendar API] Delete request - Client time:', `${hours}:${minutes.toString().padStart(2, '0')}`, 'Berlin:', `${berlinTime.hour}:${berlinTime.minute}`);
+    console.log('[Calendar API] Delete request - Client time:', `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`, 'Berlin:', berlinTime);
 
     // Verify admin token (not required for past events - they are cleaned up automatically)
     if (!isPastEvent) {
@@ -70,47 +58,27 @@ export async function POST(request: NextRequest) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
 
-    // Search for events on the Berlin date (wider window to account for timezone differences)
-    const berlinDayStart = new Date(`${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T00:00:00Z`);
-    const berlinDayEnd = new Date(`${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T23:59:59Z`);
+    // Build an exact UTC window for the selected Berlin date to avoid misses around midnight/DST.
+    const berlinDayStartUtc = zonedDateTimeToUtc(berlinDate, '00:00', BERLIN_TZ);
+    const berlinDayEndUtc = zonedDateTimeToUtc(berlinDate, '23:59', BERLIN_TZ);
 
     // List events on this Berlin day
     const response = await calendar.events.list({
       calendarId,
-      timeMin: berlinDayStart.toISOString(),
-      timeMax: berlinDayEnd.toISOString(),
+      timeMin: berlinDayStartUtc.toISOString(),
+      timeMax: berlinDayEndUtc.toISOString(),
       singleEvents: true,
       orderBy: 'startTime',
     });
 
     // Find and delete the booking event matching the Berlin time
-    const bookingEvents = response.data.items?.filter((event: any) => {
+    const bookingEvents = response.data.items?.filter((rawEvent) => {
+      const event = rawEvent as CalendarEventLike;
       if (!event.summary?.startsWith(BOOKING_EVENT_PREFIX)) return false;
       if (!event.start?.dateTime) return false;
-      
-      // Convert event time to Berlin timezone to compare
-      const eventTime = new Date(event.start.dateTime);
-      const eventFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Europe/Berlin',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      
-      const eventParts = eventFormatter.formatToParts(eventTime);
-      const eventBerlin = Object.fromEntries(eventParts.map(p => [p.type, p.value]));
-      
-      // Match by Berlin date and time
-      return (
-        eventBerlin.year === berlinTime.year &&
-        eventBerlin.month === berlinTime.month &&
-        eventBerlin.day === berlinTime.day &&
-        eventBerlin.hour === berlinTime.hour &&
-        eventBerlin.minute === berlinTime.minute
-      );
+
+      const eventBerlin = utcToZonedParts(new Date(event.start.dateTime), BERLIN_TZ);
+      return partsToDateKey(eventBerlin) === berlinDate && partsToTimeKey(eventBerlin) === berlinTime;
     }) || [];
 
     for (const event of bookingEvents) {
@@ -124,10 +92,11 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, isPastEvent });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Calendar API] Delete event error:', error);
-    
-    if (error.status === 403) {
+
+    const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined;
+    if (status === 403) {
       return NextResponse.json(
         { error: 'Permission denied.' },
         { status: 403 }

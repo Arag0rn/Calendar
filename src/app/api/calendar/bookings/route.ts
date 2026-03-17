@@ -1,9 +1,17 @@
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceAccountKeyFile } from '@/lib/service-account';
+import { partsToDateKey, partsToTimeKey, utcToZonedParts } from '@/lib/timezone';
 
 // Custom field to identify booking events
 const BOOKING_EVENT_PREFIX = '🔖 ';
+const BERLIN_TZ = 'Europe/Berlin';
+type CalendarEventLike = {
+  summary?: string | null;
+  description?: string | null;
+  id?: string | null;
+  start?: { dateTime?: string | null };
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,34 +45,17 @@ export async function GET(request: NextRequest) {
 
     // Filter only booking events (those with BOOKING_EVENT_PREFIX)
     const bookings = response.data.items
-      ?.filter((event: any) => event.summary?.startsWith(BOOKING_EVENT_PREFIX))
-      .map((event: any) => {
+      ?.filter((event) => (event as CalendarEventLike).summary?.startsWith(BOOKING_EVENT_PREFIX))
+      .map((rawEvent) => {
+        const event = rawEvent as CalendarEventLike;
         if (!event.start?.dateTime) return null;
 
-        // Event is stored in Europe/Berlin timezone
-        const eventDate = event.start.dateTime;
-        const startTime = new Date(eventDate);
-        
-        // Extract date/time components in Berlin timezone using Intl API
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'Europe/Berlin',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        });
-        
-        const parts = formatter.formatToParts(startTime);
-        const berlinTime = Object.fromEntries(parts.map(p => [p.type, p.value]));
-        
-        const dateStr = `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}`;
-        const timeStr = `${berlinTime.hour}:${berlinTime.minute}`;
-        
-        // Send Berlin ISO datetime for client conversion
-        const berlinDateTimeStr = `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T${berlinTime.hour}:${berlinTime.minute}:00`;
-        const isoDateTime = startTime.toISOString(); // Full ISO for reference
+        const startTime = new Date(event.start.dateTime);
+        const berlin = utcToZonedParts(startTime, BERLIN_TZ);
+        const dateStr = partsToDateKey(berlin);
+        const timeStr = partsToTimeKey(berlin);
+        const berlinDateTimeStr = `${dateStr}T${String(berlin.hour).padStart(2, '0')}:${String(berlin.minute).padStart(2, '0')}:${String(berlin.second).padStart(2, '0')}`;
+        const isoDateTime = startTime.toISOString();
         
         // Parse attendee info from event description
         const description = event.description || '';
@@ -93,7 +84,7 @@ export async function GET(request: NextRequest) {
       .filter(Boolean) || [];
 
     return NextResponse.json({ bookings });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Calendar API] Fetch bookings error:', error);
     return NextResponse.json({ bookings: [] });
   }

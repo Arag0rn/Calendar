@@ -18,7 +18,7 @@ interface BookedSlot {
 export default function Home() {
   const [bookedSlots, setBookedSlots] = useState<BookedSlot[]>([]);
   const [isClient, setIsClient] = useState(false);
-  const [busySlots, setBusySlots] = useState<Array<{ date: string; time: string }>>([]);
+  const [busySlots, setBusySlots] = useState<Array<{ date: string; time: string; isoDateTime?: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -168,7 +168,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 p-8">
+    <main className="min-h-screen bg-linear-to-b from-blue-50 to-indigo-100 p-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-indigo-900">Система бронювання</h1>

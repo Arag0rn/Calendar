@@ -1,6 +1,12 @@
 import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceAccountKeyFile } from '@/lib/service-account';
+import { partsToDateKey, partsToTimeKey, utcToZonedParts } from '@/lib/timezone';
+
+const BERLIN_TZ = 'Europe/Berlin';
+type CalendarEventLike = {
+  start?: { dateTime?: string | null };
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,38 +40,25 @@ export async function GET(request: NextRequest) {
     });
 
     // Extract busy times
-    const busySlots = response.data.items?.map((event: any) => {
+    const busySlots = response.data.items?.map((rawEvent) => {
+      const event = rawEvent as CalendarEventLike;
       if (!event.start?.dateTime) return null;
 
-      const eventStart = event.start.dateTime;
-      const startTime = new Date(eventStart);
-      
-      // Extract date/time in Berlin timezone
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Europe/Berlin',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      
-      const parts = formatter.formatToParts(startTime);
-      const berlinTime = Object.fromEntries(parts.map(p => [p.type, p.value]));
-      
-      const dateStr = `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}`;
-      const timeStr = `${berlinTime.hour}:${berlinTime.minute}`;
+      const startTime = new Date(event.start.dateTime);
+      const berlin = utcToZonedParts(startTime, BERLIN_TZ);
+      const dateStr = partsToDateKey(berlin);
+      const timeStr = partsToTimeKey(berlin);
 
-      return { date: dateStr, time: timeStr };
+      return { date: dateStr, time: timeStr, isoDateTime: startTime.toISOString() };
     }).filter(Boolean) || [];
 
     return NextResponse.json({ busySlots });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Calendar API] Full Error:', error);
-    
+
+    const err = error as { status?: number; message?: string };
     // Check for specific error types
-    if (error.status === 404) {
+    if (err.status === 404) {
       return NextResponse.json(
         { 
           error: 'Calendar not found. Did you share the calendar with the Service Account?',
@@ -79,7 +72,7 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    if (error.status === 401 || error.status === 403) {
+    if (err.status === 401 || err.status === 403) {
       return NextResponse.json(
         { 
           error: 'Permission denied. Service Account may not have access to calendar.',
@@ -93,7 +86,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: 'Failed to fetch calendar events', details: error.message },
+      { error: 'Failed to fetch calendar events', details: err.message },
       { status: 500 }
     );
   }

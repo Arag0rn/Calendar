@@ -7,6 +7,7 @@ import SlotPicker from './SlotPicker';
 interface BookedSlot {
   date: string;
   time: string;
+  isoDateTime?: string;
   name: string;
   email: string;
   meetLink?: string;
@@ -28,6 +29,14 @@ const getFirstDayOfMonth = (date: Date) => {
 
 const formatDate = (year: number, month: number, day: number) => {
   return `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+};
+
+const getLocalDateKey = (slot: BookedSlot): string => {
+  if (slot.isoDateTime) {
+    const dt = new Date(slot.isoDateTime);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  }
+  return slot.date;
 };
 
 export default function BookingCalendar({ onSlotBooked, bookedSlots, busySlots = [] }: BookingCalendarProps) {
@@ -71,7 +80,7 @@ export default function BookingCalendar({ onSlotBooked, bookedSlots, busySlots =
 
   const isBooked = (day: number) => {
     const dateStr = formatDate(year, month, day);
-    return bookedSlots.some(slot => slot.date === dateStr);
+    return bookedSlots.some((slot) => getLocalDateKey(slot) === dateStr);
   };
 
   const isToday = (day: number) => {

@@ -2,10 +2,14 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { partsToDateKey, utcToZonedParts, zonedDateTimeToUtc } from '@/lib/timezone';
+
+const BERLIN_TZ = 'Europe/Berlin';
 
 interface BookedSlot {
   date: string;
   time: string;
+  isoDateTime?: string;
   name: string;
   email: string;
 }
@@ -15,37 +19,60 @@ interface SlotPickerProps {
   onConfirm: (time: string, name: string, email: string, meetLink?: string) => void;
   onClose: () => void;
   bookedSlots: BookedSlot[];
-  busySlots?: Array<{ date: string; time: string }>;
+  busySlots?: Array<{ date: string; time: string; isoDateTime?: string }>;
 }
 
-const generateTimeSlots = (dateStr: string) => {
-  const slots = [];
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  const dayOfWeek = date.getDay(); // 0 = Неділя, 1 = Понеділок, 2 = Вівторок, 3 = Середа
-  
-  // Вихідні дні для видалення: Пн (1), Вт (2), Ср (3)
-  const isWeekdayWithRestriction = dayOfWeek >= 1 && dayOfWeek <= 3;
-  
-  // Часи для видалення у Пн/Вт/Ср: 17:30 - 20:45 (тобто 17:30, 18:00, 18:30, 19:00, 19:30, 20:00, 20:30)
-  const blockedTimes = new Set([
-    '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30'
-  ]);
-  
+const buildBerlinBaseSlotsForDate = (berlinDateKey: string): string[] => {
+  const [year, month, day] = berlinDateKey.split('-').map(Number);
+  const berlinDay = new Date(year, month - 1, day).getDay();
+  const hasRestriction = berlinDay >= 1 && berlinDay <= 3;
+  const blockedTimes = new Set(['17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30']);
+
+  const slots: string[] = [];
   for (let hour = 9; hour < 22; hour++) {
     for (const minute of ['00', '30']) {
-      const timeStr = `${hour.toString().padStart(2, '0')}:${minute}`;
-      
-      // Пропустить заблоковані часи для Пн/Вт/Ср
-      if (isWeekdayWithRestriction && blockedTimes.has(timeStr)) {
-        continue;
-      }
-      
-      slots.push(timeStr);
+      const t = `${hour.toString().padStart(2, '0')}:${minute}`;
+      if (hasRestriction && blockedTimes.has(t)) continue;
+      slots.push(t);
     }
   }
-  
   return slots;
+};
+
+const getLocalDateKey = (d: Date): string => {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const buildLocalDisplaySlots = (localDateKey: string): string[] => {
+  const [y, m, d] = localDateKey.split('-').map(Number);
+  const anchor = new Date(y, m - 1, d, 12, 0, 0, 0);
+
+  // Candidate Berlin dates that can map to this local date.
+  const berlinDateCandidates = new Set<string>();
+  [-24, 0, 24].forEach((h) => {
+    const shifted = new Date(anchor.getTime() + h * 60 * 60 * 1000);
+    const berlin = utcToZonedParts(shifted, BERLIN_TZ);
+    berlinDateCandidates.add(partsToDateKey(berlin));
+  });
+
+  const out: Array<{ utc: number; localTime: string }> = [];
+
+  for (const berlinDate of berlinDateCandidates) {
+    const berlinSlots = buildBerlinBaseSlotsForDate(berlinDate);
+    for (const berlinTime of berlinSlots) {
+      const utc = zonedDateTimeToUtc(berlinDate, berlinTime, BERLIN_TZ);
+      const localDate = getLocalDateKey(utc);
+      if (localDate !== localDateKey) continue;
+
+      out.push({
+        utc: utc.getTime(),
+        localTime: `${String(utc.getHours()).padStart(2, '0')}:${String(utc.getMinutes()).padStart(2, '0')}`,
+      });
+    }
+  }
+
+  out.sort((a, b) => a.utc - b.utc);
+  return out.map((x) => x.localTime);
 };
 
 const generateGoogleMeetLink = () => {
@@ -61,13 +88,28 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
   const [error, setError] = useState('');
   const [isCreatingMeet, setIsCreatingMeet] = useState(false);
 
-  const timeSlots = generateTimeSlots(date);
+  const timeSlots = buildLocalDisplaySlots(date);
+
+  const toLocalDateTime = (iso?: string, fallbackDate?: string, fallbackTime?: string) => {
+    if (iso) {
+      const d = new Date(iso);
+      return {
+        date: getLocalDateKey(d),
+        time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+      };
+    }
+    return { date: fallbackDate || '', time: fallbackTime || '' };
+  };
+
   const bookedTimes = bookedSlots
-    .filter(slot => slot.date === date)
-    .map(slot => slot.time);
+    .map((slot) => toLocalDateTime(slot.isoDateTime, slot.date, slot.time))
+    .filter((slot) => slot.date === date)
+    .map((slot) => slot.time);
+
   const busyTimes = busySlots
-    .filter(slot => slot.date === date)
-    .map(slot => slot.time);
+    .map((slot) => toLocalDateTime(slot.isoDateTime, slot.date, slot.time))
+    .filter((slot) => slot.date === date)
+    .map((slot) => slot.time);
 
   const isTimeBooked = (time: string) => bookedTimes.includes(time) || busyTimes.includes(time);
   const isBusy = (time: string) => busyTimes.includes(time);
@@ -133,7 +175,7 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
         {/* Name Input */}
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Ваше ім'я
+            Ваше ім&apos;я
           </label>
           <input
             type="text"

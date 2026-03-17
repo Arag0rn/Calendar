@@ -2,8 +2,10 @@ import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendBookingEmails } from '@/lib/email';
 import { getServiceAccountKeyFile } from '@/lib/service-account';
+import { utcToZonedParts } from '@/lib/timezone';
 
 const BOOKING_EVENT_PREFIX = '🔖 ';
+const BERLIN_TZ = 'Europe/Berlin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,45 +32,21 @@ export async function POST(request: NextRequest) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
 
-    // Parse date and time from client
+    // Convert client local wall-time to UTC using client offset.
     const [year, month, day] = date.split('-').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
+    const localMs = new Date(year, month - 1, day, hours, minutes, 0, 0).getTime();
+    const utcMs = localMs + (timezoneOffsetMinutes || 0) * 60 * 1000;
+    const utcStart = new Date(utcMs);
+    const utcEnd = new Date(utcMs + 30 * 60 * 1000);
 
-    // Convert client's local time to UTC
-    const clientDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    const clientTzOffsetMs = (timezoneOffsetMinutes || 0) * 60 * 1000;
-    const utcMs = clientDate.getTime() + clientTzOffsetMs;
-    const utcDate = new Date(utcMs);
+    // Convert UTC instant to Berlin wall-time for storage policy.
+    const berlinStart = utcToZonedParts(utcStart, BERLIN_TZ);
+    const berlinEnd = utcToZonedParts(utcEnd, BERLIN_TZ);
+    const berlinDateTimeStr = `${berlinStart.year}-${String(berlinStart.month).padStart(2, '0')}-${String(berlinStart.day).padStart(2, '0')}T${String(berlinStart.hour).padStart(2, '0')}:${String(berlinStart.minute).padStart(2, '0')}:${String(berlinStart.second).padStart(2, '0')}`;
+    const berlinEndTimeStr = `${berlinEnd.year}-${String(berlinEnd.month).padStart(2, '0')}-${String(berlinEnd.day).padStart(2, '0')}T${String(berlinEnd.hour).padStart(2, '0')}:${String(berlinEnd.minute).padStart(2, '0')}:${String(berlinEnd.second).padStart(2, '0')}`;
 
-    // Convert UTC to Europe/Berlin timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Berlin',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-    
-    const parts = formatter.formatToParts(utcDate);
-    const berlinTime = Object.fromEntries(parts.map(p => [p.type, p.value]));
-    
-    // Build Berlin datetime string (YYYY-MM-DDTHH:MM:SS)
-    const berlinDateTimeStr = `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T${berlinTime.hour}:${berlinTime.minute}:${berlinTime.second}`;
-    const berlinEndTimeStr = (() => {
-      // Add 30 minutes to Berlin time
-      let min = parseInt(berlinTime.minute) + 30;
-      let hr = parseInt(berlinTime.hour);
-      if (min >= 60) {
-        min -= 60;
-        hr += 1;
-      }
-      return `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')}:${berlinTime.second}`;
-    })();
-
-    console.log('[Calendar API] Client local time:', `${hours}:${minutes.toString().padStart(2, '0')}`);
+    console.log('[Calendar API] Client local time:', `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
     console.log('[Calendar API] Berlin time (calculated):', berlinDateTimeStr);
 
     // Build event description
@@ -84,11 +62,11 @@ export async function POST(request: NextRequest) {
       description,
       start: {
         dateTime: berlinDateTimeStr,
-        timeZone: 'Europe/Berlin',
+        timeZone: BERLIN_TZ,
       },
       end: {
         dateTime: berlinEndTimeStr,
-        timeZone: 'Europe/Berlin',
+        timeZone: BERLIN_TZ,
       }
     };
 
@@ -117,10 +95,11 @@ export async function POST(request: NextRequest) {
       success: true,
       eventId: response.data.id
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Calendar API] Create event error:', error);
-    
-    if (error.status === 403) {
+
+    const status = typeof error === 'object' && error && 'status' in error ? (error as { status?: number }).status : undefined;
+    if (status === 403) {
       return NextResponse.json(
         { error: 'Permission denied. Calendar not shared with Service Account.' },
         { status: 403 }
