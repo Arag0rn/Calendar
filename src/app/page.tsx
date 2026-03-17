@@ -123,7 +123,6 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to save booking:', error);
     }
-    }
   };
 
   const handleCancelSlot = async (date: string, time: string, adminToken: string): Promise<boolean> => {
