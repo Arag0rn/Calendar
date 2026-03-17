@@ -6,9 +6,11 @@ import { Trash2, ExternalLink, X } from 'lucide-react';
 interface BookedSlot {
   date: string;
   time: string;
+  isoDateTime?: string; // UTC ISO datetime from server
   name: string;
   email: string;
   meetLink?: string;
+  eventId?: string;
 }
 
 interface BookedSlotsProps {
@@ -23,13 +25,36 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const formatDate = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-');
+  const formatDate = (dateStr: string, isoDateTime?: string) => {
     const monthNames = [
       'січ', 'лют', 'бер', 'кві', 'тра', 'чер',
       'ли', 'сер', 'вер', 'жов', 'лис', 'гру'
     ];
+    
+    // If we have ISO datetime, use it to get the correct local date
+    if (isoDateTime) {
+      const date = new Date(isoDateTime);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = date.getMonth();
+      return `${day} ${monthNames[month]}`;
+    }
+    
+    // Fallback to string parsing if no ISO datetime
+    const [year, month, day] = dateStr.split('-');
     return `${day} ${monthNames[parseInt(month) - 1]}`;
+  };
+
+  const formatTime = (timeStr: string, isoDateTime?: string) => {
+    // If we have ISO datetime, use it to get the correct local time
+    if (isoDateTime) {
+      const date = new Date(isoDateTime);
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+    
+    // Fallback to provided time string
+    return timeStr;
   };
 
   const handleDeleteClick = (slot: BookedSlot) => {
@@ -63,6 +88,11 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
   };
 
   const sortedSlots = [...slots].sort((a, b) => {
+    // Use isoDateTime if available (already in UTC)
+    if (a.isoDateTime && b.isoDateTime) {
+      return new Date(a.isoDateTime).getTime() - new Date(b.isoDateTime).getTime();
+    }
+    // Fallback to date and time strings
     const dateA = new Date(`${a.date}T${a.time}`);
     const dateB = new Date(`${b.date}T${b.time}`);
     return dateA.getTime() - dateB.getTime();
@@ -92,7 +122,7 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
                     {slot.name}
                   </p>
                   <p className="text-indigo-700 text-xs mt-1">
-                    {formatDate(slot.date)} о {slot.time}
+                    {formatDate(slot.date, slot.isoDateTime)} о {formatTime(slot.time, slot.isoDateTime)}
                   </p>
                   <p className="text-indigo-600 text-xs mt-1 truncate">
                     {slot.email}

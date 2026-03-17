@@ -60,18 +60,17 @@ export async function POST(request: NextRequest) {
       description += `\nMeet: ${meetLink}`;
     }
 
-    // Create event with Europe/Kyiv timezone
-    // Google Calendar will display this event in the calendar's timezone
+    // Create event - save in UTC without timezone specification
+    // Google Calendar stores all events in UTC internally
+    // Display will depend on calendar's timezone (Europe/Kyiv)
     const event = {
       summary: `${BOOKING_EVENT_PREFIX}${name}`,
       description,
       start: {
         dateTime: startTime.toISOString(),
-        timeZone: 'Europe/Kyiv',
       },
       end: {
         dateTime: endTime.toISOString(),
-        timeZone: 'Europe/Kyiv',
       }
     };
 

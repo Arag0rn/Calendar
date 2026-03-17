@@ -41,40 +41,22 @@ export async function GET(request: NextRequest) {
       .map((event: any) => {
         if (!event.start?.dateTime) return null;
 
-        // Parse the ISO datetime string correctly
-        // Google Calendar returns dateTime with timezone info
+        // Parse the ISO UTC datetime string
         const eventDate = event.start.dateTime;
         const startTime = new Date(eventDate);
         
-        // Extract date in the timezone it was created (Europe/Kyiv)
-        // Since Google Calendar stores with timezone, we need to use the raw datetime
+        // Convert UTC to UTC components (don't adjust for any timezone)
         const year = startTime.getUTCFullYear();
         const month = String(startTime.getUTCMonth() + 1).padStart(2, '0');
         const day = String(startTime.getUTCDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
         
-        // For time, we need to account for the timezone offset
-        // Get the timezone offset for Europe/Kyiv
-        const formatter = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'Europe/Kyiv',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        });
-        
-        const parts = formatter.formatToParts(startTime);
-        const partsObj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-        
-        const hours = partsObj.hour;
-        const minutes = partsObj.minute;
+        const hours = String(startTime.getUTCHours()).padStart(2, '0');
+        const minutes = String(startTime.getUTCMinutes()).padStart(2, '0');
         const timeStr = `${hours}:${minutes}`;
         
-        // Get correct date from Kyiv timezone
-        const kyivDate = `${partsObj.year}-${partsObj.month}-${partsObj.day}`;
+        // Send full ISO datetime so client can convert to its own timezone
+        const isoDateTime = startTime.toISOString();
         
         // Parse attendee info from event description
         const description = event.description || '';
@@ -90,8 +72,9 @@ export async function GET(request: NextRequest) {
         }
 
         return {
-          date: kyivDate,
+          date: dateStr,
           time: timeStr,
+          isoDateTime,
           name,
           email,
           meetLink,

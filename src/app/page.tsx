@@ -7,9 +7,11 @@ import BookedSlots from '@/components/BookedSlots';
 interface BookedSlot {
   date: string;
   time: string;
+  isoDateTime?: string; // UTC ISO string from server
   name: string;
   email: string;
   meetLink?: string;
+  eventId?: string;
 }
 
 export default function Home() {

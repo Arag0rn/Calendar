@@ -40,23 +40,15 @@ export async function GET(request: NextRequest) {
       const eventStart = event.start.dateTime;
       const startTime = new Date(eventStart);
       
-      // Use Europe/Kyiv timezone for consistency
-      const timeZone = 'Europe/Kyiv';
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
+      // Use UTC components directly - no timezone conversion
+      const year = startTime.getUTCFullYear();
+      const month = String(startTime.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(startTime.getUTCDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
       
-      const parts = formatter.formatToParts(startTime);
-      const partsObj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-      
-      const dateStr = `${partsObj.year}-${partsObj.month}-${partsObj.day}`;
-      const timeStr = `${partsObj.hour}:${partsObj.minute}`;
+      const hours = String(startTime.getUTCHours()).padStart(2, '0');
+      const minutes = String(startTime.getUTCMinutes()).padStart(2, '0');
+      const timeStr = `${hours}:${minutes}`;
 
       return { date: dateStr, time: timeStr };
     }).filter(Boolean) || [];
