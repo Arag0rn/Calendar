@@ -105,18 +105,18 @@ export default function BookingCalendar({ onSlotBooked, bookedSlots, busySlots =
         <div className="flex items-center justify-between mb-4">
           <button
             onClick={prevMonth}
-            className="p-2 hover:bg-gray-100 rounded-lg transition"
+            className="p-2 hover:bg-gray-100 rounded-xl transition"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-7 h-7 bg-blue-700 hover:bg-blue-800 text-white hover:text-white cursor-pointer rounded-lg transition-all hover:scale-110" />
           </button>
           <h2 className="text-2xl font-bold text-gray-800">
             {monthNames[month]} {year}
           </h2>
           <button
             onClick={nextMonth}
-            className="p-2 hover:bg-gray-100 rounded-lg transition"
+            className="p-2 hover:bg-gray-100 rounded-xl transition"
           >
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-7 h-7 bg-blue-700 hover:bg-blue-800 text-white hover:text-white cursor-pointer rounded-lg transition-all hover:scale-110" />
           </button>
         </div>
 
@@ -137,10 +137,10 @@ export default function BookingCalendar({ onSlotBooked, bookedSlots, busySlots =
               onClick={() => day && selectDate(day)}
               disabled={!day || isPast(day || 0)}
               className={`
-                aspect-square rounded-lg font-semibold transition-all
+                aspect-square rounded-2xl font-semibold transition-all
                 ${!day ? 'bg-gray-50' : ''}
                 ${day && isPast(day) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}
-                ${day && !isPast(day) ? 'hover:bg-indigo-100 cursor-pointer' : ''}
+                ${day && !isPast(day) ? 'hover:bg-indigo-100 cursor-pointer text-black' : ''}
                 ${isToday(day || 0) ? 'bg-indigo-500 text-white border-2 border-indigo-600' : ''}
                 ${isBooked(day || 0) && !isToday(day || 0) ? 'bg-green-100 text-green-800 border-2 border-green-300' : ''}
                 ${day && !isToday(day) && !isBooked(day) && !isPast(day) ? 'bg-white border-2 border-gray-200' : ''}

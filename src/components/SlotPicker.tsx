@@ -92,7 +92,7 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-bold text-gray-800">
             Виберіть час
@@ -122,7 +122,7 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
               setError('');
             }}
             placeholder="Введіть ваше ім'я"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-950"
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-950"
           />
         </div>
 
@@ -139,7 +139,7 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
               setError('');
             }}
             placeholder="your.email@example.com"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-black"
           />
         </div>
 
@@ -165,7 +165,7 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
                   disabled={isTimeBooked(time)}
                   title={busy ? 'Зайнято у вашому Google Calendar' : booked ? 'Вже зарезервовано' : ''}
                   className={`
-                    p-2 rounded-lg font-medium text-sm transition-all
+                    p-2 rounded-xl font-medium text-sm transition-all
                     ${busy
                       ? 'bg-red-100 text-red-600 cursor-not-allowed border-2 border-red-300'
                       : booked
@@ -185,13 +185,13 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
         </div>
 
         {error && (
-          <div className="text-red-500 text-sm mb-4 p-3 bg-red-50 rounded-lg">
+          <div className="text-red-500 text-sm mb-4 p-3 bg-red-50 rounded-xl">
             {error}
           </div>
         )}
 
         {selectedTime && (
-          <div className="mb-4 p-3 bg-indigo-50 rounded-lg text-sm text-indigo-800">
+          <div className="mb-4 p-3 bg-indigo-50 rounded-xl text-sm text-indigo-800">
             Обраний час: <strong>{selectedTime}</strong>
           </div>
         )}
@@ -200,14 +200,14 @@ export default function SlotPicker({ date, onConfirm, onClose, bookedSlots, busy
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition"
           >
             Відмінити
           </button>
           <button
             onClick={handleConfirm}
             disabled={isCreatingMeet}
-            className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-600 transition disabled:bg-gray-400"
+            className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-xl font-medium hover:bg-indigo-600 transition disabled:bg-gray-400"
           >
             {isCreatingMeet ? 'Створюю...' : 'Забронювати'}
           </button>

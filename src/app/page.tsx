@@ -24,6 +24,42 @@ export default function Home() {
     fetchBookedSlots();
   }, []);
 
+  const deletePastEvents = async (slots: BookedSlot[]) => {
+    const now = new Date();
+    const pastEvents: BookedSlot[] = [];
+
+    // Find events that are in the past
+    for (const slot of slots) {
+      const [year, month, day] = slot.date.split('-').map(Number);
+      const [hours, minutes] = slot.time.split(':').map(Number);
+      
+      const eventTime = new Date(year, month - 1, day, hours, minutes);
+      
+      if (eventTime < now) {
+        pastEvents.push(slot);
+      }
+    }
+
+    // Delete past events (no token required for past events)
+    if (pastEvents.length > 0) {
+      for (const slot of pastEvents) {
+        try {
+          await fetch('/api/calendar/delete-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              date: slot.date,
+              time: slot.time,
+              adminToken: '' // No token needed for past events
+            })
+          });
+        } catch (error) {
+          console.error(`Failed to delete past event ${slot.date} ${slot.time}:`, error);
+        }
+      }
+    }
+  };
+
   const fetchBookedSlots = async () => {
     try {
       setIsLoading(true);
@@ -37,7 +73,11 @@ export default function Home() {
       );
       if (bookingsResponse.ok) {
         const data = await bookingsResponse.json();
-        setBookedSlots(data.bookings || []);
+        const bookings = data.bookings || [];
+        setBookedSlots(bookings);
+        
+        // Delete past events automatically
+        await deletePastEvents(bookings);
       }
 
       // Fetch busy slots from calendar

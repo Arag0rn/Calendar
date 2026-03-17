@@ -45,3 +45,4 @@ google-service-account.json
 .env.*.local
 get-refresh-token.js
 get-refresh-token.mjs
+service-account-base64.txt

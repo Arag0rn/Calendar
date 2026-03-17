@@ -15,13 +15,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify admin token
-    const expectedToken = process.env.ADMIN_DELETE_TOKEN;
-    if (!expectedToken || adminToken !== expectedToken) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Invalid admin token' },
-        { status: 403 }
-      );
+    // Parse date and time to check if event is in the past
+    const [year, month, day] = date.split('-').map(Number);
+    const [hours, minutes] = time.split(':').map(Number);
+    const eventTime = new Date(year, month - 1, day, hours, minutes);
+    const now = new Date();
+    const isPastEvent = eventTime < now;
+
+    // Verify admin token (not required for past events - they are cleaned up automatically)
+    if (!isPastEvent) {
+      const expectedToken = process.env.ADMIN_DELETE_TOKEN;
+      if (!expectedToken || adminToken !== expectedToken) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Invalid admin token' },
+          { status: 403 }
+        );
+      }
     }
 
     // Get service account key
@@ -36,11 +45,7 @@ export async function POST(request: NextRequest) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
 
-    // Parse date and time
-    const [year, month, day] = date.split('-').map(Number);
-    const [hours, minutes] = time.split(':').map(Number);
-
-    const startTime = new Date(year, month - 1, day, hours, minutes);
+    const startTime = eventTime;
     const endTime = new Date(year, month - 1, day, hours + 1, minutes); // Search 1 hour window
 
     // List events at this time
@@ -64,11 +69,11 @@ export async function POST(request: NextRequest) {
           calendarId,
           eventId: event.id,
         });
-        console.log('[Calendar API] Event deleted:', event.id);
+        console.log('[Calendar API] Event deleted:', event.id, isPastEvent ? '(past event cleanup)' : '(admin deletion)');
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, isPastEvent });
   } catch (error: any) {
     console.error('[Calendar API] Delete event error:', error);
     

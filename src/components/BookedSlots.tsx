@@ -85,7 +85,7 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
             {sortedSlots.map((slot, idx) => (
               <div
                 key={idx}
-                className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex justify-between items-start"
+                className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex justify-between items-start"
               >
                 <div className="flex-1">
                   <p className="font-semibold text-indigo-900 text-sm">
@@ -110,7 +110,7 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
                 </div>
                 <button
                   onClick={() => handleDeleteClick(slot)}
-                  className="ml-2 text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition"
+                  className="ml-2 text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition"
                   title="Скасування бронювання"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -132,7 +132,7 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
       {/* Delete Confirmation Modal */}
       {deleteModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-6">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-gray-800">
                 Скасувати бронювання
@@ -157,11 +157,11 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
                 setDeleteError(null);
               }}
               placeholder="Адмін-токен"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 mb-4"
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 mb-4"
             />
 
             {deleteError && (
-              <div className="text-red-500 text-sm mb-4 p-3 bg-red-50 rounded-lg">
+              <div className="text-red-500 text-sm mb-4 p-3 bg-red-50 rounded-xl">
                 {deleteError}
               </div>
             )}
@@ -169,14 +169,14 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteModalOpen(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition"
               >
                 Скасувати
               </button>
               <button
                 onClick={handleConfirmDelete}
                 disabled={isDeleting || !deleteToken.trim()}
-                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition disabled:bg-gray-400"
+                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition disabled:bg-gray-400"
               >
                 {isDeleting ? 'Видаляю...' : 'Видалити'}
               </button>
