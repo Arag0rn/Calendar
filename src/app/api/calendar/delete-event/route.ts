@@ -18,9 +18,34 @@ export async function POST(request: NextRequest) {
     // Parse date and time to check if event is in the past
     const [year, month, day] = date.split('-').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
-    const eventTime = new Date(year, month - 1, day, hours, minutes);
+    
+    // Use Ukraine timezone (Europe/Kyiv) - same as create-event
+    const timeZone = 'Europe/Kyiv';
+    
+    // Create UTC date from Kyiv local time
+    const localDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Kyiv',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    
+    const parts = formatter.formatToParts(localDate);
+    const partsObj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    
+    const kyivHours = parseInt(partsObj.hour);
+    const kyivMinutes = parseInt(partsObj.minute);
+    
+    const offset = (kyivHours - hours) * 60 + (kyivMinutes - minutes);
+    const offsetMs = offset * 60 * 1000;
+    
+    const startTime = new Date(localDate.getTime() - offsetMs);
     const now = new Date();
-    const isPastEvent = eventTime < now;
+    const isPastEvent = startTime < now;
 
     // Verify admin token (not required for past events - they are cleaned up automatically)
     if (!isPastEvent) {
@@ -45,8 +70,7 @@ export async function POST(request: NextRequest) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
 
-    const startTime = eventTime;
-    const endTime = new Date(year, month - 1, day, hours + 1, minutes); // Search 1 hour window
+    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Search 1 hour window
 
     // List events at this time
     const response = await calendar.events.list({

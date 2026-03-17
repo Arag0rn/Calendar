@@ -32,7 +32,37 @@ export async function POST(request: NextRequest) {
     const [year, month, day] = date.split('-').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
 
-    const startTime = new Date(year, month - 1, day, hours, minutes);
+    // Use Ukraine timezone (Europe/Kyiv)
+    const timeZone = 'Europe/Kyiv';
+    
+    // Create a date object in UTC that represents the local time in Kyiv
+    // First, create the date/time as if it's in UTC
+    const localDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+    
+    // Get what time this would be in Kyiv timezone
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Kyiv',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    
+    const parts = formatter.formatToParts(localDate);
+    const partsObj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    
+    // Calculate the offset between UTC and Kyiv
+    const kyivHours = parseInt(partsObj.hour);
+    const kyivMinutes = parseInt(partsObj.minute);
+    const kyivDate = parseInt(partsObj.day);
+    
+    const offset = (kyivHours - hours) * 60 + (kyivMinutes - minutes);
+    const offsetMs = offset * 60 * 1000;
+    
+    // Adjust the UTC date by the offset
+    const startTime = new Date(localDate.getTime() - offsetMs);
     const endTime = new Date(startTime.getTime() + 30 * 60 * 1000); // 30 minutes
 
     // Build event description
@@ -41,17 +71,17 @@ export async function POST(request: NextRequest) {
       description += `\nMeet: ${meetLink}`;
     }
 
-    // Create event
+    // Create event with proper timezone
     const event = {
       summary: `${BOOKING_EVENT_PREFIX}${name}`,
       description,
       start: {
         dateTime: startTime.toISOString(),
-        timeZone: 'UTC',
+        timeZone: timeZone,
       },
       end: {
         dateTime: endTime.toISOString(),
-        timeZone: 'UTC',
+        timeZone: timeZone,
       }
     };
 

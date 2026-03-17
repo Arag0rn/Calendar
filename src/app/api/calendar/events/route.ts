@@ -37,18 +37,26 @@ export async function GET(request: NextRequest) {
     const busySlots = response.data.items?.map((event: any) => {
       if (!event.start?.dateTime) return null;
 
-      const startTime = new Date(event.start.dateTime);
+      const eventStart = event.start.dateTime;
+      const startTime = new Date(eventStart);
       
-      // Format date as YYYY-MM-DD (local date)
-      const year = startTime.getFullYear();
-      const month = String(startTime.getMonth() + 1).padStart(2, '0');
-      const day = String(startTime.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
+      // Use Europe/Kyiv timezone for consistency
+      const timeZone = 'Europe/Kyiv';
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
       
-      // Format time as HH:MM
-      const hours = String(startTime.getHours()).padStart(2, '0');
-      const minutes = String(startTime.getMinutes()).padStart(2, '0');
-      const timeStr = `${hours}:${minutes}`;
+      const parts = formatter.formatToParts(startTime);
+      const partsObj = Object.fromEntries(parts.map(p => [p.type, p.value]));
+      
+      const dateStr = `${partsObj.year}-${partsObj.month}-${partsObj.day}`;
+      const timeStr = `${partsObj.hour}:${partsObj.minute}`;
 
       return { date: dateStr, time: timeStr };
     }).filter(Boolean) || [];
