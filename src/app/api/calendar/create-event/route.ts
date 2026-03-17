@@ -72,10 +72,6 @@ export async function POST(request: NextRequest) {
       end: {
         dateTime: endTime.toISOString(),
         timeZone: 'Europe/Kyiv',
-      },
-      end: {
-        dateTime: endTime.toISOString(),
-        timeZone: timeZone,
       }
     };
 
