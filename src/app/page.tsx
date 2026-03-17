@@ -97,6 +97,9 @@ export default function Home() {
 
   const handleSlotBooked = async (date: string, time: string, name: string, email: string, meetLink?: string) => {
     try {
+      // Get client timezone offset in minutes
+      const timezoneOffsetMinutes = new Date().getTimezoneOffset();
+      
       // Save to Google Calendar
       const response = await fetch('/api/calendar/create-event', {
         method: 'POST',
@@ -106,7 +109,8 @@ export default function Home() {
           time,
           name,
           email,
-          meetLink
+          meetLink,
+          timezoneOffsetMinutes // Send client's timezone offset
         })
       });
       
@@ -119,15 +123,24 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to save booking:', error);
     }
+    }
   };
 
   const handleCancelSlot = async (date: string, time: string, adminToken: string): Promise<boolean> => {
     try {
+      // Get client timezone offset in minutes
+      const timezoneOffsetMinutes = new Date().getTimezoneOffset();
+      
       // Delete from Google Calendar
       const response = await fetch('/api/calendar/delete-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, time, adminToken })
+        body: JSON.stringify({ 
+          date, 
+          time, 
+          adminToken,
+          timezoneOffsetMinutes // Send client's timezone offset
+        })
       });
       
       if (response.ok) {

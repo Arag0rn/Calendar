@@ -7,7 +7,7 @@ const BOOKING_EVENT_PREFIX = '🔖 ';
 
 export async function POST(request: NextRequest) {
   try {
-    const { date, time, name, email, meetLink } = await request.json();
+    const { date, time, name, email, meetLink, timezoneOffsetMinutes } = await request.json();
 
     if (!date || !time || !name || !email) {
       return NextResponse.json(
@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    console.log('[Calendar API] Creating event with timezone offset:', timezoneOffsetMinutes, 'minutes');
 
     // Get service account key
     const keyFile = getServiceAccountKeyFile();
@@ -28,42 +30,29 @@ export async function POST(request: NextRequest) {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
 
-    // Parse date and time
+    // Parse date and time from client
     const [year, month, day] = date.split('-').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
 
-    // Use Ukraine timezone (Europe/Kyiv)
-    const timeZone = 'Europe/Kyiv';
+    // Client's local time as a number (minutes since midnight)
+    const clientLocalMinutes = hours * 60 + minutes;
     
-    // Create a date object in UTC that represents the local time in Kyiv
-    // First, create the date/time as if it's in UTC
-    const localDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+    // Client's timezone offset from UTC (negative for UTC+X, positive for UTC-X)
+    // Example: UTC+2 (Ukraine) = -120 minutes
+    // Example: UTC+1 (Germany) = -60 minutes
+    const clientTzOffsetMs = (timezoneOffsetMinutes || 0) * 60 * 1000;
     
-    // Get what time this would be in Kyiv timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Kyiv',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+    // Create a reference date in the client's local timezone
+    const clientDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
     
-    const parts = formatter.formatToParts(localDate);
-    const partsObj = Object.fromEntries(parts.map(p => [p.type, p.value]));
-    
-    // Calculate the offset between UTC and Kyiv
-    const kyivHours = parseInt(partsObj.hour);
-    const kyivMinutes = parseInt(partsObj.minute);
-    const kyivDate = parseInt(partsObj.day);
-    
-    const offset = (kyivHours - hours) * 60 + (kyivMinutes - minutes);
-    const offsetMs = offset * 60 * 1000;
-    
-    // Adjust the UTC date by the offset
-    const startTime = new Date(localDate.getTime() - offsetMs);
-    const endTime = new Date(startTime.getTime() + 30 * 60 * 1000); // 30 minutes
+    // Convert to UTC by subtracting the timezone offset
+    // If client is at UTC+2 with localTime 14:30, then UTC is 14:30 - 2:00 = 12:30
+    const utcMs = clientDate.getTime() + clientTzOffsetMs;
+    const startTime = new Date(utcMs);
+    const endTime = new Date(utcMs + 30 * 60 * 1000); // 30 minutes
+
+    console.log('[Calendar API] Client local time:', `${hours}:${minutes.toString().padStart(2, '0')}`);
+    console.log('[Calendar API] UTC time (calculated):', startTime.toISOString());
 
     // Build event description
     let description = `Name: ${name}\nEmail: ${email}`;
@@ -71,13 +60,18 @@ export async function POST(request: NextRequest) {
       description += `\nMeet: ${meetLink}`;
     }
 
-    // Create event with proper timezone
+    // Create event with Europe/Kyiv timezone
+    // Google Calendar will display this event in the calendar's timezone
     const event = {
       summary: `${BOOKING_EVENT_PREFIX}${name}`,
       description,
       start: {
         dateTime: startTime.toISOString(),
-        timeZone: timeZone,
+        timeZone: 'Europe/Kyiv',
+      },
+      end: {
+        dateTime: endTime.toISOString(),
+        timeZone: 'Europe/Kyiv',
       },
       end: {
         dateTime: endTime.toISOString(),
