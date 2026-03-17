@@ -40,15 +40,22 @@ export async function GET(request: NextRequest) {
       const eventStart = event.start.dateTime;
       const startTime = new Date(eventStart);
       
-      // Use UTC components directly - no timezone conversion
-      const year = startTime.getUTCFullYear();
-      const month = String(startTime.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(startTime.getUTCDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
+      // Extract date/time in Berlin timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Berlin',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
       
-      const hours = String(startTime.getUTCHours()).padStart(2, '0');
-      const minutes = String(startTime.getUTCMinutes()).padStart(2, '0');
-      const timeStr = `${hours}:${minutes}`;
+      const parts = formatter.formatToParts(startTime);
+      const berlinTime = Object.fromEntries(parts.map(p => [p.type, p.value]));
+      
+      const dateStr = `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}`;
+      const timeStr = `${berlinTime.hour}:${berlinTime.minute}`;
 
       return { date: dateStr, time: timeStr };
     }).filter(Boolean) || [];

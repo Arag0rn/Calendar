@@ -41,22 +41,30 @@ export async function GET(request: NextRequest) {
       .map((event: any) => {
         if (!event.start?.dateTime) return null;
 
-        // Parse the ISO UTC datetime string
+        // Event is stored in Europe/Berlin timezone
         const eventDate = event.start.dateTime;
         const startTime = new Date(eventDate);
         
-        // Convert UTC to UTC components (don't adjust for any timezone)
-        const year = startTime.getUTCFullYear();
-        const month = String(startTime.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(startTime.getUTCDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
+        // Extract date/time components in Berlin timezone using Intl API
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Europe/Berlin',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        });
         
-        const hours = String(startTime.getUTCHours()).padStart(2, '0');
-        const minutes = String(startTime.getUTCMinutes()).padStart(2, '0');
-        const timeStr = `${hours}:${minutes}`;
+        const parts = formatter.formatToParts(startTime);
+        const berlinTime = Object.fromEntries(parts.map(p => [p.type, p.value]));
         
-        // Send full ISO datetime so client can convert to its own timezone
-        const isoDateTime = startTime.toISOString();
+        const dateStr = `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}`;
+        const timeStr = `${berlinTime.hour}:${berlinTime.minute}`;
+        
+        // Send Berlin ISO datetime for client conversion
+        const berlinDateTimeStr = `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T${berlinTime.hour}:${berlinTime.minute}:00`;
+        const isoDateTime = startTime.toISOString(); // Full ISO for reference
         
         // Parse attendee info from event description
         const description = event.description || '';
@@ -74,6 +82,7 @@ export async function GET(request: NextRequest) {
         return {
           date: dateStr,
           time: timeStr,
+          berlinDateTime: berlinDateTimeStr,
           isoDateTime,
           name,
           email,

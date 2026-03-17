@@ -6,7 +6,8 @@ import { Trash2, ExternalLink, X } from 'lucide-react';
 interface BookedSlot {
   date: string;
   time: string;
-  isoDateTime?: string; // UTC ISO datetime from server
+  berlinDateTime?: string; // Berlin timezone datetime string
+  isoDateTime?: string; // Full ISO datetime for reference
   name: string;
   email: string;
   meetLink?: string;
@@ -31,7 +32,7 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
       'ли', 'сер', 'вер', 'жов', 'лис', 'гру'
     ];
     
-    // If we have ISO datetime, use it to get the correct local date
+    // If we have ISO datetime (UTC), convert to client's local timezone
     if (isoDateTime) {
       const date = new Date(isoDateTime);
       const day = String(date.getDate()).padStart(2, '0');
@@ -45,7 +46,7 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
   };
 
   const formatTime = (timeStr: string, isoDateTime?: string) => {
-    // If we have ISO datetime, use it to get the correct local time
+    // If we have ISO datetime (UTC), convert to client's local timezone
     if (isoDateTime) {
       const date = new Date(isoDateTime);
       const hours = String(date.getHours()).padStart(2, '0');
@@ -88,7 +89,7 @@ export default function BookedSlots({ slots, onCancel }: BookedSlotsProps) {
   };
 
   const sortedSlots = [...slots].sort((a, b) => {
-    // Use isoDateTime if available (already in UTC)
+    // Use isoDateTime if available (UTC)
     if (a.isoDateTime && b.isoDateTime) {
       return new Date(a.isoDateTime).getTime() - new Date(b.isoDateTime).getTime();
     }

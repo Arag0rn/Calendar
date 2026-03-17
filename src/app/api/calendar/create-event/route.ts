@@ -34,25 +34,42 @@ export async function POST(request: NextRequest) {
     const [year, month, day] = date.split('-').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
 
-    // Client's local time as a number (minutes since midnight)
-    const clientLocalMinutes = hours * 60 + minutes;
-    
-    // Client's timezone offset from UTC (negative for UTC+X, positive for UTC-X)
-    // Example: UTC+2 (Ukraine) = -120 minutes
-    // Example: UTC+1 (Germany) = -60 minutes
-    const clientTzOffsetMs = (timezoneOffsetMinutes || 0) * 60 * 1000;
-    
-    // Create a reference date in the client's local timezone
+    // Convert client's local time to UTC
     const clientDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    
-    // Convert to UTC by subtracting the timezone offset
-    // If client is at UTC+2 with localTime 14:30, then UTC is 14:30 - 2:00 = 12:30
+    const clientTzOffsetMs = (timezoneOffsetMinutes || 0) * 60 * 1000;
     const utcMs = clientDate.getTime() + clientTzOffsetMs;
-    const startTime = new Date(utcMs);
-    const endTime = new Date(utcMs + 30 * 60 * 1000); // 30 minutes
+    const utcDate = new Date(utcMs);
+
+    // Convert UTC to Europe/Berlin timezone
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Berlin',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    
+    const parts = formatter.formatToParts(utcDate);
+    const berlinTime = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    
+    // Build Berlin datetime string (YYYY-MM-DDTHH:MM:SS)
+    const berlinDateTimeStr = `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T${berlinTime.hour}:${berlinTime.minute}:${berlinTime.second}`;
+    const berlinEndTimeStr = (() => {
+      // Add 30 minutes to Berlin time
+      let min = parseInt(berlinTime.minute) + 30;
+      let hr = parseInt(berlinTime.hour);
+      if (min >= 60) {
+        min -= 60;
+        hr += 1;
+      }
+      return `${berlinTime.year}-${berlinTime.month}-${berlinTime.day}T${String(hr).padStart(2, '0')}:${String(min).padStart(2, '0')}:${berlinTime.second}`;
+    })();
 
     console.log('[Calendar API] Client local time:', `${hours}:${minutes.toString().padStart(2, '0')}`);
-    console.log('[Calendar API] UTC time (calculated):', startTime.toISOString());
+    console.log('[Calendar API] Berlin time (calculated):', berlinDateTimeStr);
 
     // Build event description
     let description = `Name: ${name}\nEmail: ${email}`;
@@ -60,17 +77,18 @@ export async function POST(request: NextRequest) {
       description += `\nMeet: ${meetLink}`;
     }
 
-    // Create event - save in UTC without timezone specification
-    // Google Calendar stores all events in UTC internally
-    // Display will depend on calendar's timezone (Europe/Kyiv)
+    // Create event - save in Europe/Berlin timezone
+    // All times are stored as Berlin time
     const event = {
       summary: `${BOOKING_EVENT_PREFIX}${name}`,
       description,
       start: {
-        dateTime: startTime.toISOString(),
+        dateTime: berlinDateTimeStr,
+        timeZone: 'Europe/Berlin',
       },
       end: {
-        dateTime: endTime.toISOString(),
+        dateTime: berlinEndTimeStr,
+        timeZone: 'Europe/Berlin',
       }
     };
 

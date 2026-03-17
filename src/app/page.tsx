@@ -7,7 +7,8 @@ import BookedSlots from '@/components/BookedSlots';
 interface BookedSlot {
   date: string;
   time: string;
-  isoDateTime?: string; // UTC ISO string from server
+  berlinDateTime?: string; // Berlin timezone datetime from server
+  isoDateTime?: string; // UTC ISO datetime from server
   name: string;
   email: string;
   meetLink?: string;
@@ -30,15 +31,21 @@ export default function Home() {
     const now = new Date();
     const pastEvents: BookedSlot[] = [];
 
-    // Find events that are in the past
+    // Find events that are in the past using ISO datetime
     for (const slot of slots) {
-      const [year, month, day] = slot.date.split('-').map(Number);
-      const [hours, minutes] = slot.time.split(':').map(Number);
-      
-      const eventTime = new Date(year, month - 1, day, hours, minutes);
-      
-      if (eventTime < now) {
-        pastEvents.push(slot);
+      if (slot.isoDateTime) {
+        const eventTime = new Date(slot.isoDateTime);
+        if (eventTime < now) {
+          pastEvents.push(slot);
+        }
+      } else {
+        // Fallback: parse from date and time strings
+        const [year, month, day] = slot.date.split('-').map(Number);
+        const [hours, minutes] = slot.time.split(':').map(Number);
+        const eventTime = new Date(year, month - 1, day, hours, minutes);
+        if (eventTime < now) {
+          pastEvents.push(slot);
+        }
       }
     }
 
@@ -52,7 +59,8 @@ export default function Home() {
             body: JSON.stringify({
               date: slot.date,
               time: slot.time,
-              adminToken: '' // No token needed for past events
+              adminToken: '', // No token needed for past events
+              timezoneOffsetMinutes: new Date().getTimezoneOffset()
             })
           });
         } catch (error) {
