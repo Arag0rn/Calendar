@@ -24,12 +24,23 @@ async function getGmailClient() {
       console.error('[Email]   - GOOGLE_OAUTH_CLIENT_ID:', clientId ? '✓' : '✗');
       console.error('[Email]   - GOOGLE_OAUTH_CLIENT_SECRET:', clientSecret ? '✓' : '✗');
       console.error('[Email]   - GOOGLE_OAUTH_REFRESH_TOKEN:', refreshToken ? '✓' : '✗');
+      console.error('[Email] 📝 Set these in Vercel: Settings > Environment Variables');
       return null;
     }
 
     console.log('[Email] ✓ OAuth2 credentials found, initializing Gmail client...');
 
-    oauth2Client = new google.auth.OAuth2(clientId, clientSecret, 'http://localhost:3333/callback');
+    // Determine callback URL based on environment
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.APP_URL 
+        ? process.env.APP_URL
+        : 'http://localhost:3000';
+    
+    const redirectUri = `${baseUrl}/api/auth/callback`;
+    console.log('[Email] Using redirect URI:', redirectUri);
+
+    oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     oauth2Client.setCredentials({
       refresh_token: refreshToken,
     });
@@ -49,7 +60,14 @@ export async function sendEmail({ to, subject, html }: EmailOptions) {
     const gmailClient = await getGmailClient();
     
     if (!gmailClient) {
-      console.error('[Email] ❌ Gmail client not available. Check environment variables.');
+      console.error('[Email] ❌ Gmail client not available.');
+      console.error('[Email] 🔍 Troubleshooting:');
+      console.error('[Email]   1. Verify environment variables on Vercel dashboard');
+      console.error('[Email]   2. Check if GOOGLE_OAUTH_REFRESH_TOKEN is set and not expired');
+      console.error('[Email]   3. Go to Vercel Settings > Environment Variables and add:');
+      console.error('[Email]      - GOOGLE_OAUTH_CLIENT_ID');
+      console.error('[Email]      - GOOGLE_OAUTH_CLIENT_SECRET');
+      console.error('[Email]      - GOOGLE_OAUTH_REFRESH_TOKEN');
       return null;
     }
 
@@ -94,9 +112,20 @@ export async function sendEmail({ to, subject, html }: EmailOptions) {
     }
     
     if (error.message?.includes('invalid_grant')) {
-      console.error('[Email] ⚠️  Invalid Grant - Refresh token may be expired or invalid');
-      console.error('[Email]   Solution: Generate a new refresh token and update environment variables');
+      console.error('[Email] ⚠️  Invalid Grant Error - Refresh token expired or invalid');
+      console.error('[Email] 🔧 Solution:');
+      console.error('[Email]    1. Run: node get-refresh-token.mjs');
+      console.error('[Email]    2. Copy new refresh token');
+      console.error('[Email]    3. Update on Vercel: Settings > Environment Variables');
+      console.error('[Email]    4. Redeploy your application');
       gmail = null; // Reset client to retry with new token
+      oauth2Client = null;
+    }
+    
+    if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+      console.error('[Email] ⚠️  Unauthorized - Check if environment variables are set correctly');
+      gmail = null;
+      oauth2Client = null;
     }
     
     return null;

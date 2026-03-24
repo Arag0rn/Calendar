@@ -49,15 +49,12 @@ export async function POST(request: NextRequest) {
     console.log('[Calendar API] Client local time:', `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
     console.log('[Calendar API] Berlin time (calculated):', berlinDateTimeStr);
 
-    // Build event description
+    // Build event description (without Meet link - it will be in conferenceData)
     let description = `Name: ${name}\nEmail: ${email}`;
-    if (meetLink) {
-      description += `\nMeet: ${meetLink}`;
-    }
 
-    // Create event - save in Europe/Berlin timezone
+    // Create event with Google Meet conference
     // All times are stored as Berlin time
-    const event = {
+    const event: any = {
       summary: `${BOOKING_EVENT_PREFIX}${name}`,
       description,
       start: {
@@ -67,15 +64,36 @@ export async function POST(request: NextRequest) {
       end: {
         dateTime: berlinEndTimeStr,
         timeZone: BERLIN_TZ,
-      }
+      },
+      conferenceData: {
+        createRequest: {
+          requestId: `meet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          conferenceSolutionKey: {
+            type: 'hangoutsMeet',
+          },
+        },
+      },
     };
 
     const response = await calendar.events.insert({
       calendarId,
       requestBody: event,
+      conferenceDataVersion: 1,
     });
 
     console.log('[Calendar API] Event created:', response.data.id);
+
+    // Extract Meet link from conference data if available
+    let generatedMeetLink: string | undefined;
+    if (response.data.conferenceData?.entryPoints) {
+      const meetEntry = response.data.conferenceData.entryPoints.find(
+        (ep: any) => ep.entryPointType === 'video'
+      );
+      if (meetEntry) {
+        generatedMeetLink = meetEntry.uri;
+        console.log('[Calendar API] Google Meet link generated:', generatedMeetLink);
+      }
+    }
 
     // Send confirmation emails via Gmail OAuth2
     try {
@@ -84,7 +102,7 @@ export async function POST(request: NextRequest) {
         clientName: name,
         date,
         time,
-        meetLink,
+        meetLink: generatedMeetLink,
       });
     } catch (emailError) {
       console.error('[Email] Failed to send emails:', emailError);
@@ -93,7 +111,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      eventId: response.data.id
+      eventId: response.data.id,
+      meetLink: generatedMeetLink,
     });
   } catch (error: unknown) {
     console.error('[Calendar API] Create event error:', error);
