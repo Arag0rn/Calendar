@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
         createRequest: {
           requestId: `meet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           conferenceSolutionKey: {
-            type: 'hangoutsMeet',
+            type: 'eventHangout',
           },
         },
       },
