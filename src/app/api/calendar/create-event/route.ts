@@ -9,7 +9,7 @@ const BERLIN_TZ = 'Europe/Berlin';
 
 export async function POST(request: NextRequest) {
   try {
-    const { date, time, name, email, meetLink, timezoneOffsetMinutes } = await request.json();
+    const { date, time, name, email, timezoneOffsetMinutes } = await request.json();
 
     if (!date || !time || !name || !email) {
       return NextResponse.json(
@@ -20,17 +20,28 @@ export async function POST(request: NextRequest) {
 
     console.log('[Calendar API] Creating event with timezone offset:', timezoneOffsetMinutes, 'minutes');
 
-    // Get service account key
-    const keyFile = getServiceAccountKeyFile();
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
 
-    // Create auth client
-    const auth = new google.auth.GoogleAuth({
+    // Prefer OAuth user credentials for Meet creation.
+    // Service account remains as fallback for basic event creation.
+    const oauthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const oauthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    const oauthRefreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+    const oauthRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:3333/callback';
+
+    let oauthCalendar: ReturnType<typeof google.calendar> | null = null;
+    if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
+      const oauth2Client = new google.auth.OAuth2(oauthClientId, oauthClientSecret, oauthRedirectUri);
+      oauth2Client.setCredentials({ refresh_token: oauthRefreshToken });
+      oauthCalendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    }
+
+    const keyFile = getServiceAccountKeyFile();
+    const serviceAuth = new google.auth.GoogleAuth({
       credentials: keyFile,
       scopes: ['https://www.googleapis.com/auth/calendar'],
     });
-
-    const calendar = google.calendar({ version: 'v3', auth });
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+    const serviceCalendar = google.calendar({ version: 'v3', auth: serviceAuth });
 
     // Convert client local wall-time to UTC using client offset.
     const [year, month, day] = date.split('-').map(Number);
@@ -66,58 +77,56 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    const requestId = `meet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = `meet-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
     let response;
 
-    try {
-      // Primary attempt: explicit Google Meet type.
-      response = await calendar.events.insert({
-        calendarId,
-        requestBody: {
-          ...baseEvent,
-          conferenceData: {
-            createRequest: {
-              requestId,
-              conferenceSolutionKey: {
-                type: 'hangoutsMeet',
+    if (oauthCalendar) {
+      try {
+        // Let Google choose the conference type for this account/calendar.
+        response = await oauthCalendar.events.insert({
+          calendarId,
+          requestBody: {
+            ...baseEvent,
+            conferenceData: {
+              createRequest: {
+                requestId,
               },
             },
           },
-        },
-        conferenceDataVersion: 1,
-      });
-    } catch (conferenceTypeError: any) {
-      const message = conferenceTypeError?.message || '';
-      const statusCode = conferenceTypeError?.status;
+          conferenceDataVersion: 1,
+        });
+      } catch (oauthConferenceError: any) {
+        console.warn('[Calendar API] OAuth conference creation failed, retrying event without Meet:', oauthConferenceError?.message);
 
-      if (statusCode === 400 && String(message).includes('Invalid conference type value')) {
-        console.warn('[Calendar API] Invalid conference type, retrying without explicit conferenceSolutionKey type');
+        // If Meet is blocked for this account/calendar, still create the booking event.
+        response = await oauthCalendar.events.insert({
+          calendarId,
+          requestBody: baseEvent,
+        });
+      }
+    } else {
+      console.warn('[Calendar API] OAuth credentials for Calendar are missing, using Service Account fallback.');
 
-        try {
-          // Fallback #1: let Google decide conference type.
-          response = await calendar.events.insert({
-            calendarId,
-            requestBody: {
-              ...baseEvent,
-              conferenceData: {
-                createRequest: {
-                  requestId,
-                },
+      try {
+        response = await serviceCalendar.events.insert({
+          calendarId,
+          requestBody: {
+            ...baseEvent,
+            conferenceData: {
+              createRequest: {
+                requestId,
               },
             },
-            conferenceDataVersion: 1,
-          });
-        } catch (conferenceUnsupportedError: any) {
-          console.warn('[Calendar API] Conference creation failed, creating event without Meet link:', conferenceUnsupportedError?.message);
+          },
+          conferenceDataVersion: 1,
+        });
+      } catch (serviceConferenceError: any) {
+        console.warn('[Calendar API] Service Account conference creation failed, retrying event without Meet:', serviceConferenceError?.message);
 
-          // Fallback #2: create event without conference data.
-          response = await calendar.events.insert({
-            calendarId,
-            requestBody: baseEvent,
-          });
-        }
-      } else {
-        throw conferenceTypeError;
+        response = await serviceCalendar.events.insert({
+          calendarId,
+          requestBody: baseEvent,
+        });
       }
     }
 
