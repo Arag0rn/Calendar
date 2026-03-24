@@ -52,9 +52,8 @@ export async function POST(request: NextRequest) {
     // Build event description (without Meet link - it will be in conferenceData)
     let description = `Name: ${name}\nEmail: ${email}`;
 
-    // Create event with Google Meet conference
-    // All times are stored as Berlin time
-    const event: any = {
+    // Base event payload (all times are stored as Berlin time)
+    const baseEvent: any = {
       summary: `${BOOKING_EVENT_PREFIX}${name}`,
       description,
       start: {
@@ -65,21 +64,62 @@ export async function POST(request: NextRequest) {
         dateTime: berlinEndTimeStr,
         timeZone: BERLIN_TZ,
       },
-      conferenceData: {
-        createRequest: {
-          requestId: `meet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          conferenceSolutionKey: {
-            type: 'eventHangout',
-          },
-        },
-      },
     };
 
-    const response = await calendar.events.insert({
-      calendarId,
-      requestBody: event,
-      conferenceDataVersion: 1,
-    });
+    const requestId = `meet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    let response;
+
+    try {
+      // Primary attempt: explicit Google Meet type.
+      response = await calendar.events.insert({
+        calendarId,
+        requestBody: {
+          ...baseEvent,
+          conferenceData: {
+            createRequest: {
+              requestId,
+              conferenceSolutionKey: {
+                type: 'hangoutsMeet',
+              },
+            },
+          },
+        },
+        conferenceDataVersion: 1,
+      });
+    } catch (conferenceTypeError: any) {
+      const message = conferenceTypeError?.message || '';
+      const statusCode = conferenceTypeError?.status;
+
+      if (statusCode === 400 && String(message).includes('Invalid conference type value')) {
+        console.warn('[Calendar API] Invalid conference type, retrying without explicit conferenceSolutionKey type');
+
+        try {
+          // Fallback #1: let Google decide conference type.
+          response = await calendar.events.insert({
+            calendarId,
+            requestBody: {
+              ...baseEvent,
+              conferenceData: {
+                createRequest: {
+                  requestId,
+                },
+              },
+            },
+            conferenceDataVersion: 1,
+          });
+        } catch (conferenceUnsupportedError: any) {
+          console.warn('[Calendar API] Conference creation failed, creating event without Meet link:', conferenceUnsupportedError?.message);
+
+          // Fallback #2: create event without conference data.
+          response = await calendar.events.insert({
+            calendarId,
+            requestBody: baseEvent,
+          });
+        }
+      } else {
+        throw conferenceTypeError;
+      }
+    }
 
     console.log('[Calendar API] Event created:', response.data.id);
 
