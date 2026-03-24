@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       const meetEntry = response.data.conferenceData.entryPoints.find(
         (ep: any) => ep.entryPointType === 'video'
       );
-      if (meetEntry) {
+      if (meetEntry && meetEntry.uri) {
         generatedMeetLink = meetEntry.uri;
         console.log('[Calendar API] Google Meet link generated:', generatedMeetLink);
       }
